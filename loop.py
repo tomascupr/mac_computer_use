@@ -24,7 +24,7 @@ from anthropic.types.beta import (
 
 from tools import BashTool, ComputerTool, EditTool, ToolCollection, ToolResult
 
-BETA_FLAG = "computer-use-2024-10-22"
+BETA_FLAG = "computer-use-2025-01-24"
 
 
 class APIProvider(StrEnum):
@@ -33,10 +33,15 @@ class APIProvider(StrEnum):
     VERTEX = "vertex"
 
 
+# Default models for computer use (updated to latest supported models)
+# Alternative: Use Claude Opus 4.1 for even better performance
+# APIProvider.ANTHROPIC: "claude-opus-4-1-20250805"
+# APIProvider.BEDROCK: "anthropic.claude-opus-4-1-20250805-v1:0" 
+# APIProvider.VERTEX: "claude-opus-4-1@20250805"
 PROVIDER_TO_DEFAULT_MODEL_NAME: dict[APIProvider, str] = {
-    APIProvider.ANTHROPIC: "claude-3-5-sonnet-20241022",
-    APIProvider.BEDROCK: "anthropic.claude-3-5-sonnet-20241022-v2:0",
-    APIProvider.VERTEX: "claude-3-5-sonnet-v2@20241022",
+    APIProvider.ANTHROPIC: "claude-3-7-sonnet-20250219",
+    APIProvider.BEDROCK: "anthropic.claude-3-7-sonnet-20250219-v1:0",
+    APIProvider.VERTEX: "claude-3-7-sonnet@20250219",
 }
 
 
@@ -93,7 +98,29 @@ SYSTEM_PROMPT = f"""<SYSTEM_CAPABILITY>
 * Note: Command line function calls may have latency. Chain multiple operations into single requests where feasible.
 
 * The current date is {datetime.today().strftime('%A, %B %-d, %Y')}.
-</SYSTEM_CAPABILITY>"""
+</SYSTEM_CAPABILITY>
+
+<SCREENSHOT_VERIFICATION>
+* Every computer use action (clicks, typing, keyboard shortcuts, mouse movements, drags) automatically captures a screenshot showing the result.
+* You MUST carefully analyze each screenshot to verify your action achieved the intended outcome.
+* Explicitly state what you observe in the screenshot: "The screenshot shows [specific description of what you see]"
+* Verify the action's outcome: "This confirms [action] succeeded because [specific observation from screenshot]"
+* If the screenshot shows something unexpected, describe it and adjust your approach accordingly.
+* Pay close attention to:
+  - Did the UI element you interacted with respond as expected?
+  - Are there new windows, dialogs, menus, or notifications?
+  - Did the content or page change in the expected way?
+  - Are there any error messages or warnings visible?
+  - Is anything still loading or processing (spinners, progress bars)?
+  - Is the visual state consistent with your goal?
+</SCREENSHOT_VERIFICATION>
+
+<IMPORTANT>
+* Do NOT assume your actions succeeded without verifying the screenshot.
+* If a screenshot shows your action did not work as expected, try a different approach.
+* GUI applications may take time to appear or respond - the screenshot will show if you need to wait.
+* Always evaluate: "What does the screenshot tell me about whether I achieved my goal?"
+</IMPORTANT>"""
 
 async def sampling_loop(
     *,

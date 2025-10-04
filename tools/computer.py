@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Literal, TypedDict
 from uuid import uuid4
 
-from anthropic.types.beta import BetaToolComputerUse20241022Param
+from anthropic.types.beta import BetaToolComputerUse20250124Param
 
 from .base import BaseAnthropicTool, ToolError, ToolResult
 from .run import run
@@ -71,7 +71,7 @@ class ComputerTool(BaseAnthropicTool):
     """
 
     name: Literal["computer"] = "computer"
-    api_type: Literal["computer_20241022"] = "computer_20241022"
+    api_type: Literal["computer_20250124"] = "computer_20250124"
     width: int
     height: int
     display_num: int | None
@@ -87,7 +87,7 @@ class ComputerTool(BaseAnthropicTool):
             "display_number": self.display_num,
         }
 
-    def to_params(self) -> BetaToolComputerUse20241022Param:
+    def to_params(self) -> BetaToolComputerUse20250124Param:
         return {"name": self.name, "type": self.api_type, **self.options}
 
     def __init__(self):
@@ -119,9 +119,9 @@ class ComputerTool(BaseAnthropicTool):
             x, y = self.scale_coordinates(ScalingSource.API, coordinate[0], coordinate[1])
 
             if action == "mouse_move":
-                return await self.shell(f"cliclick m:{x},{y}")
+                return await self.shell(f"cliclick m:{x},{y}", take_screenshot=True)
             elif action == "left_click_drag":
-                return await self.shell(f"cliclick dd:{x},{y}")
+                return await self.shell(f"cliclick dd:{x},{y}", take_screenshot=True)
 
         if action in ("key", "type"):
             if text is None:
@@ -180,8 +180,8 @@ class ComputerTool(BaseAnthropicTool):
                         else:
                             # Single letter/number key
                             cmd = f"cliclick t:{text}"
-                        
-                        return await self.shell(cmd, take_screenshot=False)
+
+                        return await self.shell(cmd, take_screenshot=True)
                     else:
                         # Use keyboard library for modifier-only combinations (e.g., cmd+shift)
                         if "+" in text:
@@ -197,7 +197,14 @@ class ComputerTool(BaseAnthropicTool):
                                 None, keyboard.press_and_release, mapped_key
                             )
 
-                    return ToolResult(output=f"Pressed key: {text}", error=None, base64_image=None)
+                        # Take screenshot after key press to show result
+                        await asyncio.sleep(self._screenshot_delay)
+                        screenshot_result = await self.screenshot()
+                        return ToolResult(
+                            output=f"Pressed key: {text}",
+                            error=None,
+                            base64_image=screenshot_result.base64_image
+                        )
 
                 except Exception as e:
                     return ToolResult(output=None, error=str(e), base64_image=None)
@@ -245,7 +252,7 @@ class ComputerTool(BaseAnthropicTool):
                     "middle_click": "mc:.",
                     "double_click": "dc:.",
                 }[action]
-                return await self.shell(f"cliclick {click_cmd}")
+                return await self.shell(f"cliclick {click_cmd}", take_screenshot=True)
 
         raise ToolError(f"Invalid action: {action}")
 
