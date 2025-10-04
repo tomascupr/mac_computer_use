@@ -1,7 +1,6 @@
 streamlit>=1.38.0
-anthropic[bedrock,vertex]>=0.37.1
+anthropic[bedrock,vertex]>=0.45.0
 jsonschema==4.22.0
-keyboard>=0.13.5
 boto3>=1.28.57
 google-auth<3,>=2
 python-dotenv>=1.0.1

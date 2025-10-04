@@ -3,7 +3,6 @@ import base64
 import os
 import shlex
 import pyautogui
-import keyboard
 from enum import StrEnum
 from pathlib import Path
 from typing import Literal, TypedDict
@@ -28,8 +27,14 @@ Action = Literal[
     "right_click",
     "middle_click",
     "double_click",
+    "triple_click",
     "screenshot",
     "cursor_position",
+    "scroll",
+    "left_mouse_down",
+    "left_mouse_up",
+    "hold_key",
+    "wait",
 ]
 
 
@@ -132,79 +137,79 @@ class ComputerTool(BaseAnthropicTool):
                 raise ToolError(output=f"{text} must be a string")
 
             if action == "key":
-                # Convert common key names to pyautogui format
-                key_map = {
-                    "Return": "enter",
+                # Map special keys to cliclick key codes
+                special_keys_map = {
+                    "Return": "return",
+                    "return": "return",
+                    "enter": "return",
                     "space": "space",
                     "Tab": "tab",
-                    "Left": "left",
-                    "Right": "right",
-                    "Up": "up",
-                    "Down": "down",
+                    "tab": "tab",
+                    "Left": "arrow-left",
+                    "left": "arrow-left",
+                    "Right": "arrow-right",
+                    "right": "arrow-right",
+                    "Up": "arrow-up",
+                    "up": "arrow-up",
+                    "Down": "arrow-down",
+                    "down": "arrow-down",
                     "Escape": "esc",
-                    "command": "command",
-                    "cmd": "command",
-                    "alt": "alt",
-                    "shift": "shift",
-                    "ctrl": "ctrl"
+                    "escape": "esc",
+                    "esc": "esc",
+                    "delete": "delete",
+                    "backspace": "delete",
+                    "home": "home",
+                    "end": "end",
+                    "pageup": "page-up",
+                    "pagedown": "page-down",
+                    "f1": "f1", "f2": "f2", "f3": "f3", "f4": "f4",
+                    "f5": "f5", "f6": "f6", "f7": "f7", "f8": "f8",
+                    "f9": "f9", "f10": "f10", "f11": "f11", "f12": "f12",
                 }
 
                 try:
-                    # Check if combination contains letters/numbers (keyboard library can't handle these on macOS)
-                    has_letters_numbers = any(c.isalnum() for c in text.replace('+', ''))
-                    
-                    if has_letters_numbers:
-                        # Use cliclick for combinations with letters/numbers (e.g., cmd+n)
-                        if "+" in text:
-                            keys = text.split("+")
-                            modifiers = [k.strip() for k in keys[:-1]]
-                            target_key = keys[-1].strip()
-                            
-                            # Convert modifiers to cliclick format
-                            cliclick_modifiers = []
-                            for mod in modifiers:
-                                if mod in ["cmd", "command"]:
-                                    cliclick_modifiers.append("cmd")
-                                elif mod == "ctrl":
-                                    cliclick_modifiers.append("ctrl")
-                                elif mod == "alt":
-                                    cliclick_modifiers.append("alt")
-                                elif mod == "shift":
-                                    cliclick_modifiers.append("shift")
-                            
-                            if cliclick_modifiers:
-                                cmd_parts = [f"kd:{','.join(cliclick_modifiers)}", f"t:{target_key}", f"ku:{','.join(cliclick_modifiers)}"]
-                                cmd = "cliclick " + " ".join(cmd_parts)
-                            else:
-                                cmd = f"cliclick t:{target_key}"
+                    # Use cliclick for all key operations
+                    if "+" in text:
+                        keys = text.split("+")
+                        modifiers = [k.strip() for k in keys[:-1]]
+                        target_key = keys[-1].strip()
+
+                        # Convert modifiers to cliclick format
+                        cliclick_modifiers = []
+                        for mod in modifiers:
+                            if mod in ["cmd", "command"]:
+                                cliclick_modifiers.append("cmd")
+                            elif mod == "ctrl":
+                                cliclick_modifiers.append("ctrl")
+                            elif mod == "alt":
+                                cliclick_modifiers.append("alt")
+                            elif mod == "shift":
+                                cliclick_modifiers.append("shift")
+
+                        # Check if target key is a special key
+                        if target_key.lower() in special_keys_map:
+                            key_code = special_keys_map[target_key.lower()]
+                            key_action = f"kp:{key_code}"
                         else:
-                            # Single letter/number key
+                            # Regular letter/number key - use type
+                            key_action = f"t:{target_key}"
+
+                        if cliclick_modifiers:
+                            cmd_parts = [f"kd:{','.join(cliclick_modifiers)}", key_action, f"ku:{','.join(cliclick_modifiers)}"]
+                            cmd = "cliclick " + " ".join(cmd_parts)
+                        else:
+                            cmd = f"cliclick {key_action}"
+                    else:
+                        # Single key press
+                        if text.lower() in special_keys_map:
+                            # Special key - use key press
+                            key_code = special_keys_map[text.lower()]
+                            cmd = f"cliclick kp:{key_code}"
+                        else:
+                            # Regular letter/number/symbol - use type
                             cmd = f"cliclick t:{text}"
 
-                        return await self.shell(cmd, take_screenshot=True)
-                    else:
-                        # Use keyboard library for modifier-only combinations (e.g., cmd+shift)
-                        if "+" in text:
-                            keys = text.split("+")
-                            mapped_keys = [key_map.get(k.strip(), k.strip()) for k in keys]
-                            await asyncio.get_event_loop().run_in_executor(
-                                None, keyboard.press_and_release, '+'.join(mapped_keys)
-                            )
-                        else:
-                            # Handle single keys
-                            mapped_key = key_map.get(text, text)
-                            await asyncio.get_event_loop().run_in_executor(
-                                None, keyboard.press_and_release, mapped_key
-                            )
-
-                        # Take screenshot after key press to show result
-                        await asyncio.sleep(self._screenshot_delay)
-                        screenshot_result = await self.screenshot()
-                        return ToolResult(
-                            output=f"Pressed key: {text}",
-                            error=None,
-                            base64_image=screenshot_result.base64_image
-                        )
+                    return await self.shell(cmd, take_screenshot=True)
 
                 except Exception as e:
                     return ToolResult(output=None, error=str(e), base64_image=None)
@@ -224,7 +229,10 @@ class ComputerTool(BaseAnthropicTool):
             "left_click",
             "right_click",
             "double_click",
+            "triple_click",
             "middle_click",
+            "left_mouse_down",
+            "left_mouse_up",
             "screenshot",
             "cursor_position",
         ):
@@ -251,8 +259,80 @@ class ComputerTool(BaseAnthropicTool):
                     "right_click": "rc:.",
                     "middle_click": "mc:.",
                     "double_click": "dc:.",
+                    "triple_click": "tc:.",
+                    "left_mouse_down": "md:.",
+                    "left_mouse_up": "mu:.",
                 }[action]
                 return await self.shell(f"cliclick {click_cmd}", take_screenshot=True)
+
+        if action == "scroll":
+            if coordinate is None:
+                raise ToolError("coordinate is required for scroll action")
+            if not isinstance(coordinate, list) or len(coordinate) != 2:
+                raise ToolError(f"{coordinate} must be a tuple of length 2")
+            if not all(isinstance(i, int) and i >= 0 for i in coordinate):
+                raise ToolError(f"{coordinate} must be a tuple of non-negative ints")
+
+            x, y = self.scale_coordinates(ScalingSource.API, coordinate[0], coordinate[1])
+
+            # Get scroll parameters from kwargs
+            scroll_direction = kwargs.get("scroll_direction", "down")
+            scroll_amount = kwargs.get("scroll_amount", 5)
+
+            # Map direction to scroll amount with sign
+            direction_multiplier = {
+                "down": -1,
+                "up": 1,
+                "left": 1,
+                "right": -1,
+            }.get(scroll_direction, -1)
+
+            # cliclick scroll format: w:x,y (scroll with amount at position)
+            # Positive values scroll up/left, negative values scroll down/right
+            scroll_value = scroll_amount * direction_multiplier
+
+            if scroll_direction in ["up", "down"]:
+                cmd = f"cliclick m:{x},{y} w:{scroll_value}"
+            else:
+                # For horizontal scrolling, use shift+scroll
+                cmd = f"cliclick m:{x},{y} kd:shift w:{scroll_value} ku:shift"
+
+            return await self.shell(cmd, take_screenshot=True)
+
+        if action == "hold_key":
+            if text is None:
+                raise ToolError("text is required for hold_key action")
+
+            # Map key names to cliclick format
+            key_map = {
+                "command": "cmd",
+                "cmd": "cmd",
+                "ctrl": "ctrl",
+                "alt": "alt",
+                "shift": "shift",
+            }
+
+            key = key_map.get(text.lower(), text.lower())
+
+            # Hold key down (note: this will remain held until key up)
+            cmd = f"cliclick kd:{key}"
+            return await self.shell(cmd, take_screenshot=True)
+
+        if action == "wait":
+            # Get duration from kwargs, default to 1 second
+            duration = kwargs.get("duration", 1.0)
+            if not isinstance(duration, (int, float)) or duration < 0:
+                raise ToolError("duration must be a non-negative number")
+
+            await asyncio.sleep(duration)
+
+            # Take screenshot after waiting
+            screenshot_result = await self.screenshot()
+            return ToolResult(
+                output=f"Waited for {duration} seconds",
+                error=None,
+                base64_image=screenshot_result.base64_image
+            )
 
         raise ToolError(f"Invalid action: {action}")
 

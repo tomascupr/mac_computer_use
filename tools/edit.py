@@ -12,7 +12,6 @@ Command = Literal[
     "create",
     "str_replace",
     "insert",
-    "undo_edit",
 ]
 SNIPPET_LINES: int = 4
 
@@ -21,22 +20,30 @@ class EditTool(BaseAnthropicTool):
     """
     An filesystem editor tool that allows the agent to view, create, and edit files.
     The tool parameters are defined by Anthropic and are not editable.
+
+    For Claude 4 models: Uses text_editor_20250728 with name 'str_replace_based_edit_tool'
+    For Claude 3.7: Uses text_editor_20250124 with name 'str_replace_editor'
     """
 
-    api_type: Literal["text_editor_20250124"] = "text_editor_20250124"
-    name: Literal["str_replace_editor"] = "str_replace_editor"
+    api_type: Literal["text_editor_20250728"] = "text_editor_20250728"
+    name: Literal["str_replace_based_edit_tool"] = "str_replace_based_edit_tool"
+    max_characters: int | None = None
 
     _file_history: dict[Path, list[str]]
 
-    def __init__(self):
+    def __init__(self, max_characters: int | None = None):
         self._file_history = defaultdict(list)
+        self.max_characters = max_characters
         super().__init__()
 
     def to_params(self) -> BetaToolTextEditor20250124Param:
-        return {
+        params = {
             "name": self.name,
             "type": self.api_type,
         }
+        if self.max_characters is not None:
+            params["max_characters"] = self.max_characters
+        return params
 
     async def __call__(
         self,
@@ -74,8 +81,6 @@ class EditTool(BaseAnthropicTool):
             if not new_str:
                 raise ToolError("Parameter `new_str` is required for command: insert")
             return self.insert(_path, insert_line, new_str)
-        elif command == "undo_edit":
-            return self.undo_edit(_path)
         raise ToolError(
             f'Unrecognized command {command}. The allowed commands for the {self.name} tool are: {", ".join(get_args(Command))}'
         )
@@ -122,6 +127,12 @@ class EditTool(BaseAnthropicTool):
             return CLIResult(output=stdout, error=stderr)
 
         file_content = self.read_file(path)
+
+        # Apply max_characters truncation if specified (Claude 4 feature)
+        if self.max_characters is not None and len(file_content) > self.max_characters:
+            file_content = file_content[:self.max_characters]
+            file_content += f"\n\n... (File truncated. Showing first {self.max_characters} characters of {len(self.read_file(path))} total)"
+
         init_line = 1
         if view_range:
             if len(view_range) != 2 or not all(isinstance(i, int) for i in view_range):
@@ -239,18 +250,6 @@ class EditTool(BaseAnthropicTool):
         )
         success_msg += "Review the changes and make sure they are as expected (correct indentation, no duplicate lines, etc). Edit the file again if necessary."
         return CLIResult(output=success_msg)
-
-    def undo_edit(self, path: Path):
-        """Implement the undo_edit command."""
-        if not self._file_history[path]:
-            raise ToolError(f"No edit history found for {path}.")
-
-        old_text = self._file_history[path].pop()
-        self.write_file(path, old_text)
-
-        return CLIResult(
-            output=f"Last edit to {path} undone successfully. {self._make_output(old_text, str(path))}"
-        )
 
     def read_file(self, path: Path):
         """Read the content of a file from a given path; raise a ToolError if an error occurs."""

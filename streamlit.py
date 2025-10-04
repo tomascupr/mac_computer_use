@@ -85,6 +85,8 @@ def setup_state():
         st.session_state.custom_system_prompt = load_from_storage("system_prompt") or ""
     if "hide_images" not in st.session_state:
         st.session_state.hide_images = False
+    if "thinking_budget_tokens" not in st.session_state:
+        st.session_state.thinking_budget_tokens = 2048
 
 
 def _reset_model():
@@ -135,6 +137,15 @@ async def main():
             min_value=0,
             key="only_n_most_recent_images",
             help="To decrease the total tokens sent, remove older screenshots from the conversation",
+        )
+        st.number_input(
+            "Thinking Budget (tokens)",
+            min_value=0,
+            max_value=10000,
+            value=2048,
+            step=256,
+            key="thinking_budget_tokens",
+            help="Budget tokens for Claude's thinking process. Set to 0 to disable thinking. Available for Claude 4 and Claude Sonnet 3.7 models.",
         )
         st.text_area(
             "Custom System Prompt Suffix",
@@ -229,6 +240,7 @@ async def main():
                 ),
                 api_key=st.session_state.api_key,
                 only_n_most_recent_images=st.session_state.only_n_most_recent_images,
+                thinking_budget_tokens=st.session_state.thinking_budget_tokens,
             )
 
 

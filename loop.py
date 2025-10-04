@@ -34,14 +34,14 @@ class APIProvider(StrEnum):
 
 
 # Default models for computer use (updated to latest supported models)
-# Alternative: Use Claude Opus 4.1 for even better performance
-# APIProvider.ANTHROPIC: "claude-opus-4-1-20250805"
-# APIProvider.BEDROCK: "anthropic.claude-opus-4-1-20250805-v1:0" 
-# APIProvider.VERTEX: "claude-opus-4-1@20250805"
+# Using Claude Sonnet 4.5 for best performance with computer use
+# Alternative models:
+# APIProvider.ANTHROPIC: "claude-opus-4-1-20250805"  # Claude Opus 4.1
+# APIProvider.ANTHROPIC: "claude-3-7-sonnet-20250219"  # Claude Sonnet 3.7
 PROVIDER_TO_DEFAULT_MODEL_NAME: dict[APIProvider, str] = {
-    APIProvider.ANTHROPIC: "claude-3-7-sonnet-20250219",
-    APIProvider.BEDROCK: "anthropic.claude-3-7-sonnet-20250219-v1:0",
-    APIProvider.VERTEX: "claude-3-7-sonnet@20250219",
+    APIProvider.ANTHROPIC: "claude-sonnet-4-5",
+    APIProvider.BEDROCK: "anthropic.claude-sonnet-4-5-v2:0",
+    APIProvider.VERTEX: "claude-sonnet-4-5@20250514",
 }
 
 
@@ -55,7 +55,7 @@ PROVIDER_TO_DEFAULT_MODEL_NAME: dict[APIProvider, str] = {
 # * You can install applications using homebrew with your bash tool. Use curl instead of wget.
 # * To open Chrome, please just click on the Chrome icon in the Dock or use Spotlight.
 # * Using bash tool you can start GUI applications. GUI apps can be launched directly or with `open -a "Application Name"`. GUI apps will appear natively within macOS, but they may take some time to appear. Take a screenshot to confirm it did.
-# * When using your bash tool with commands that are expected to output very large quantities of text, redirect into a tmp file and use str_replace_editor or `grep -n -B <lines before> -A <lines after> <query> <filename>` to confirm output.
+# * When using your bash tool with commands that are expected to output very large quantities of text, redirect into a tmp file and use the text editor tool or `grep -n -B <lines before> -A <lines after> <query> <filename>` to confirm output.
 # * When viewing a page it can be helpful to zoom out so that you can see everything on the page. In Chrome, use Command + "-" to zoom out or Command + "+" to zoom in.
 # * When using your computer function calls, they take a while to run and send back to you. Where possible/feasible, try to chain multiple of these calls all into one function calls request.
 # * The current date is {datetime.today().strftime('%A, %B %-d, %Y')}.
@@ -134,6 +134,7 @@ async def sampling_loop(
     api_key: str,
     only_n_most_recent_images: int | None = None,
     max_tokens: int = 4096,
+    thinking_budget_tokens: int | None = 2048,
 ):
     """
     Agentic sampling loop for the assistant/tool interaction of computer use.
@@ -162,6 +163,15 @@ async def sampling_loop(
         # we use raw_response to provide debug information to streamlit. Your
         # implementation may be able call the SDK directly with:
         # `response = client.messages.create(...)` instead.
+
+        # Prepare thinking parameter if budget is specified and > 0
+        thinking_param = None
+        if thinking_budget_tokens is not None and thinking_budget_tokens > 0:
+            thinking_param = {
+                "type": "enabled",
+                "budget_tokens": thinking_budget_tokens
+            }
+
         raw_response = client.beta.messages.with_raw_response.create(
             max_tokens=max_tokens,
             messages=messages,
@@ -169,6 +179,7 @@ async def sampling_loop(
             system=system,
             tools=tool_collection.to_params(),
             betas=[BETA_FLAG],
+            **({"thinking": thinking_param} if thinking_param else {}),
         )
 
         api_response_callback(cast(APIResponse[BetaMessage], raw_response))
