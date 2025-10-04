@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Literal, TypedDict
 from uuid import uuid4
 
-from anthropic.types.beta import BetaToolComputerUse20241022Param
+from anthropic.types.beta import BetaToolComputerUse20250124Param
 
 from .base import BaseAnthropicTool, ToolError, ToolResult
 from .run import run
@@ -71,7 +71,7 @@ class ComputerTool(BaseAnthropicTool):
     """
 
     name: Literal["computer"] = "computer"
-    api_type: Literal["computer_20241022"] = "computer_20241022"
+    api_type: Literal["computer_20250124"] = "computer_20250124"
     width: int
     height: int
     display_num: int | None
@@ -87,7 +87,7 @@ class ComputerTool(BaseAnthropicTool):
             "display_number": self.display_num,
         }
 
-    def to_params(self) -> BetaToolComputerUse20241022Param:
+    def to_params(self) -> BetaToolComputerUse20250124Param:
         return {"name": self.name, "type": self.api_type, **self.options}
 
     def __init__(self):
@@ -119,9 +119,9 @@ class ComputerTool(BaseAnthropicTool):
             x, y = self.scale_coordinates(ScalingSource.API, coordinate[0], coordinate[1])
 
             if action == "mouse_move":
-                return await self.shell(f"cliclick m:{x},{y}")
+                return await self.shell(f"cliclick m:{x},{y}", take_screenshot=True)
             elif action == "left_click_drag":
-                return await self.shell(f"cliclick dd:{x},{y}")
+                return await self.shell(f"cliclick dd:{x},{y}", take_screenshot=True)
 
         if action in ("key", "type"):
             if text is None:
@@ -150,21 +150,61 @@ class ComputerTool(BaseAnthropicTool):
                 }
 
                 try:
-                    if "+" in text:
-                        # Handle combinations like "ctrl+c"
-                        keys = text.split("+")
-                        mapped_keys = [key_map.get(k.strip(), k.strip()) for k in keys]
-                        await asyncio.get_event_loop().run_in_executor(
-                            None, keyboard.press_and_release, '+'.join(mapped_keys)
-                        )
-                    else:
-                        # Handle single keys
-                        mapped_key = key_map.get(text, text)
-                        await asyncio.get_event_loop().run_in_executor(
-                            None, keyboard.press_and_release, mapped_key
-                        )
+                    # Check if combination contains letters/numbers (keyboard library can't handle these on macOS)
+                    has_letters_numbers = any(c.isalnum() for c in text.replace('+', ''))
+                    
+                    if has_letters_numbers:
+                        # Use cliclick for combinations with letters/numbers (e.g., cmd+n)
+                        if "+" in text:
+                            keys = text.split("+")
+                            modifiers = [k.strip() for k in keys[:-1]]
+                            target_key = keys[-1].strip()
+                            
+                            # Convert modifiers to cliclick format
+                            cliclick_modifiers = []
+                            for mod in modifiers:
+                                if mod in ["cmd", "command"]:
+                                    cliclick_modifiers.append("cmd")
+                                elif mod == "ctrl":
+                                    cliclick_modifiers.append("ctrl")
+                                elif mod == "alt":
+                                    cliclick_modifiers.append("alt")
+                                elif mod == "shift":
+                                    cliclick_modifiers.append("shift")
+                            
+                            if cliclick_modifiers:
+                                cmd_parts = [f"kd:{','.join(cliclick_modifiers)}", f"t:{target_key}", f"ku:{','.join(cliclick_modifiers)}"]
+                                cmd = "cliclick " + " ".join(cmd_parts)
+                            else:
+                                cmd = f"cliclick t:{target_key}"
+                        else:
+                            # Single letter/number key
+                            cmd = f"cliclick t:{text}"
 
-                    return ToolResult(output=f"Pressed key: {text}", error=None, base64_image=None)
+                        return await self.shell(cmd, take_screenshot=True)
+                    else:
+                        # Use keyboard library for modifier-only combinations (e.g., cmd+shift)
+                        if "+" in text:
+                            keys = text.split("+")
+                            mapped_keys = [key_map.get(k.strip(), k.strip()) for k in keys]
+                            await asyncio.get_event_loop().run_in_executor(
+                                None, keyboard.press_and_release, '+'.join(mapped_keys)
+                            )
+                        else:
+                            # Handle single keys
+                            mapped_key = key_map.get(text, text)
+                            await asyncio.get_event_loop().run_in_executor(
+                                None, keyboard.press_and_release, mapped_key
+                            )
+
+                        # Take screenshot after key press to show result
+                        await asyncio.sleep(self._screenshot_delay)
+                        screenshot_result = await self.screenshot()
+                        return ToolResult(
+                            output=f"Pressed key: {text}",
+                            error=None,
+                            base64_image=screenshot_result.base64_image
+                        )
 
                 except Exception as e:
                     return ToolResult(output=None, error=str(e), base64_image=None)
@@ -200,7 +240,6 @@ class ComputerTool(BaseAnthropicTool):
                     "cliclick p",
                     take_screenshot=False,
                 )
-                import pdb; pdb.set_trace()
                 if result.output:
                     x, y = map(int, result.output.strip().split(","))
                     x, y = self.scale_coordinates(ScalingSource.COMPUTER, x, y)
@@ -213,7 +252,7 @@ class ComputerTool(BaseAnthropicTool):
                     "middle_click": "mc:.",
                     "double_click": "dc:.",
                 }[action]
-                return await self.shell(f"cliclick {click_cmd}")
+                return await self.shell(f"cliclick {click_cmd}", take_screenshot=True)
 
         raise ToolError(f"Invalid action: {action}")
 
