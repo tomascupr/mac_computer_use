@@ -14,9 +14,10 @@ from typing import Any
 # Add the current directory to Python path to import tools
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import FastMCP, Image
 from tools.computer import ComputerTool
 from tools.base import ToolResult, ToolError
+import base64
 
 # Initialize the MCP server
 mcp = FastMCP("mac-computer-control")
@@ -25,22 +26,21 @@ mcp = FastMCP("mac-computer-control")
 computer_tool = ComputerTool()
 
 @mcp.tool()
-async def screenshot() -> str:
+async def screenshot() -> Image:
     """
     Take a screenshot of the current screen.
-    
+
     Returns:
-        str: Base64-encoded PNG image of the current screen
+        Image: PNG image of the current screen
     """
-    try:
-        result = await computer_tool(action="screenshot")
-        if result.error:
-            return f"Error taking screenshot: {result.error}"
-        if result.base64_image:
-            return f"Screenshot captured successfully. Base64 image data: {result.base64_image[:100]}..."
-        return "Screenshot captured but no image data returned"
-    except Exception as e:
-        return f"Error taking screenshot: {str(e)}"
+    result = await computer_tool(action="screenshot")
+    if result.error:
+        raise Exception(f"Error taking screenshot: {result.error}")
+    if result.base64_image:
+        # Decode base64 to bytes and return as Image
+        image_bytes = base64.b64decode(result.base64_image)
+        return Image(data=image_bytes, format="png")
+    raise Exception("Screenshot captured but no image data returned")
 
 
 @mcp.tool()
