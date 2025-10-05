@@ -1,96 +1,84 @@
-# Anthropic Computer Use (for Mac)
+# Mac Computer Use
 
-[Anthropic Computer Use](https://github.com/anthropics/anthropic-quickstarts/blob/main/computer-use-demo/README.md) is a beta Anthropic feature which runs a Docker image with Ubuntu and controls it. This fork allows you to run it natively on macOS, providing direct system control through native macOS commands and utilities.
+Native macOS computer control for Claude via Anthropic's Computer Use API or MCP (Model Context Protocol).
 
 > [!CAUTION]
-> This comes with obvious risks. The Anthropic agent can control everything on your Mac. Please be careful.
-> Anthropic's new Claude 3.5 Sonnet model refuses to do unsafe things like purchase items or download illegal content.
+> Claude can control your entire Mac. Be careful what you authorize.
 
-## Features
+## Quick Start
 
-- Native macOS GUI interaction (no Docker required)
-- Screen capture using native macOS commands
-- Keyboard and mouse control through cliclick
-- Multiple LLM provider support (Anthropic, Bedrock, Vertex)
-- Streamlit-based interface
-- Automatic screen resolution scaling
-- File system interaction and editing capabilities
-
-## Prerequisites
-
-- macOS Sonoma 15.7 or later
-- Python 3.12+
-- Homebrew (for installing additional dependencies)
-- cliclick (`brew install cliclick`) - Required for mouse and keyboard control
-
-## Setup Instructions
-
-1. Clone the repository and navigate to it:
+### Prerequisites
 
 ```bash
-git clone https://github.com/deedy/mac_computer_use.git
-cd mac_computer_use
+brew install cliclick
 ```
 
-2. Create and activate a virtual environment:
+Required: macOS 15.7+, Python 3.12+
+
+### Installation
 
 ```bash
+git clone https://github.com/tomascupr/mac_computer_use.git
+cd mac_computer_use
 python3.12 -m venv venv
 source venv/bin/activate
-```
-
-3. Run the setup script:
-
-```bash
-chmod +x setup.sh
-./setup.sh
-```
-
-4. Install Python requirements:
-
-```bash
 pip install -r requirements.txt
 ```
 
-## Running the Demo
+## Usage
 
-### Set up your environment and Anthropic API key
+### Option 1: MCP Server (Recommended)
 
-1. In a `.env` file add:
-
-```
-API_PROVIDER=anthropic
-ANTHROPIC_API_KEY=<key>
-WIDTH=800
-HEIGHT=600
-DISPLAY_NUM=1
-```
-
-Set the screen dimensions (recommended: stay within XGA/WXGA resolution), and put in your key from [Anthropic Console](https://console.anthropic.com/settings/keys).
-
-2. Start the Streamlit app:
+Use with Claude Desktop, Claude Code, or any MCP client:
 
 ```bash
+python mcp_server.py
+```
+
+**Claude Desktop Configuration** (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "mac-computer-control": {
+      "command": "/path/to/venv/bin/python",
+      "args": ["/path/to/mac_computer_use/mcp_server.py"]
+    }
+  }
+}
+```
+
+**Available Tools:**
+- `screenshot` - Capture screen as image
+- `click` / `click_at` - Mouse clicks
+- `type_text` - Type text
+- `press_key` - Keyboard (supports combos like `cmd+c`)
+- `mouse_move` - Move cursor
+- `right_click` / `double_click` - Mouse actions
+
+### Option 2: Streamlit UI
+
+Interactive web interface:
+
+```bash
+# Create .env file
+echo "API_PROVIDER=anthropic" >> .env
+echo "ANTHROPIC_API_KEY=your_key_here" >> .env
+
 streamlit run streamlit.py
 ```
 
-The interface will be available at http://localhost:8501
+Open http://localhost:8501
 
-## Screen Size Considerations
+## Features
 
-We recommend using one of these resolutions for optimal performance:
+- Native macOS screen capture and control
+- No Docker required
+- Works with Claude Desktop, Claude Code, Cursor, and other MCP clients
+- Automatic resolution scaling for optimal performance
+- Keyboard shortcuts and mouse control via cliclick
 
--   XGA: 1024x768 (4:3)
--   WXGA: 1280x800 (16:10)
--   FWXGA: 1366x768 (~16:9)
+## Notes
 
-Higher resolutions will be automatically scaled down to these targets to optimize model performance. You can set the resolution using environment variables:
-
-```bash
-export WIDTH=1024
-export HEIGHT=768
-streamlit run streamlit.py
-```
-
-> [!IMPORTANT]
-> The Beta API used in this reference implementation is subject to change. Please refer to the [API release notes](https://docs.anthropic.com/en/release-notes/api) for the most up-to-date information.
+- Recommended resolution: 1366x768 (auto-scaled from higher resolutions)
+- API subject to change - see [Anthropic release notes](https://docs.anthropic.com/en/release-notes/api)
